@@ -167,9 +167,19 @@ public enum ZDownloadManager implements IDownloadManager {
     }
 
     @Override
+    public DownloadBean selectDownloadBean(String url) {
+        return mDbManager.selectDownloadBean(url);
+    }
+
+    @Override
     public synchronized void deleteFile(DownloadBean bean) {
+        deleteFile(bean.getUrl());
+    }
+
+    @Override
+    public void deleteFile(String url) {
         // TODO: 2017/8/22 子线程操作 删除文件
-        mDbManager.deleteDownloadBean(bean);
+        mDbManager.deleteDownloadBean(url);
     }
 
     private Call getCall(String url, DownloadBean downloadBean) {
@@ -295,25 +305,25 @@ public enum ZDownloadManager implements IDownloadManager {
     }
 
 
-    private void notifyDownloadComplete(String url) {
+    private void notifyDownloadComplete(final String url) {
         final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloadComplete();
+                    downloadListener.onDownloadComplete(url);
                 }
             });
         }
     }
 
-    private void notifyDownloadError(String url, final Exception e) {
+    private void notifyDownloadError(final String url, final Exception e) {
         final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloadError(e);
+                    downloadListener.onDownloadError(url, e);
                 }
             });
         }
@@ -325,31 +335,31 @@ public enum ZDownloadManager implements IDownloadManager {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloading(url,progress, maxLenght);
+                    downloadListener.onDownloading(url, progress, maxLenght);
                 }
             });
         }
     }
 
-    private void notifyDownloadPause(String url, final long progress) {
+    private void notifyDownloadPause(final String url, final long progress) {
         final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloadPause(progress);
+                    downloadListener.onDownloadPause(url, progress);
                 }
             });
         }
     }
 
-    private void notifyDownloadPending(String url) {
+    private void notifyDownloadPending(final String url) {
         final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloadPending();
+                    downloadListener.onDownloadPending(url);
                 }
             });
         }

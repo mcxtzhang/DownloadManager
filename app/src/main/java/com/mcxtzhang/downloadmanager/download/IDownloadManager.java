@@ -15,13 +15,13 @@ public interface IDownloadManager {
     interface DownloadListener {
         void onDownloading(String url,long progress, long maxLenght);
 
-        void onDownloadPending();
+        void onDownloadPending(String url);
 
-        void onDownloadPause(long progress);
+        void onDownloadPause(String url,long progress);
 
-        void onDownloadComplete();
+        void onDownloadComplete(String url);
 
-        void onDownloadError(Exception e);
+        void onDownloadError(String url,Exception e);
     }
 
     //静默下载 不需要回调
@@ -58,6 +58,8 @@ public interface IDownloadManager {
     //根据url查询下载任务状态
     int selectStatus(String url);
 
-    void deleteFile(DownloadBean bean);
+    DownloadBean selectDownloadBean(String url);
 
+    void deleteFile(DownloadBean bean);
+    void deleteFile(String url);
 }

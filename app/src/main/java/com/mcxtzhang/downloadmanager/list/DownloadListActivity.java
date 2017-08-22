@@ -41,7 +41,9 @@ public class DownloadListActivity extends AppCompatActivity {
         }
         mRecyclerView.setAdapter(new CommonAdapter<DownloadBean>(this, mDatas, R.layout.item_down) {
             @Override
-            public void convert(final ViewHolder holder, final DownloadBean downloadBean) {
+            public void convert(final ViewHolder holder, DownloadBean downloadBean) {
+                //根据url查询当期前item最新的数据库值
+                downloadBean = mDownloadManager.selectDownloadBean(downloadBean.getUrl());
                 LogUtils.d("convert() called with: holder = [" + holder + "], downloadBean = [" + downloadBean + "]");
                 //注销之前任务的监听器,防止重复修改UI
                 final String pUrl = (String) holder.itemView.getTag();
@@ -53,50 +55,56 @@ public class DownloadListActivity extends AppCompatActivity {
                 holder.setText(R.id.id, downloadBean.getIndex());
                 holder.setText(R.id.tvName, downloadBean.getFileName());
                 UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
-                setButtonStatus(downloadBean, holder);
+                setButtonStatus(downloadBean.getUrl(), holder);
 
                 //监听进度 改变UI
                 mDownloadManager.registerDownloadListener(downloadBean.getUrl(), new IDownloadManager.DownloadListener() {
                     @Override
                     public void onDownloading(String url, long progress, long maxLenght) {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
-                        //同步更新bean
-                        downloadBean.setBegin(progress);
-                        downloadBean.setTotalLength(maxLenght);
-                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
-                        setButtonStatus(downloadBean, holder);
+
+                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), progress, maxLenght);
+                        setButtonStatus(url, holder);
                     }
 
                     @Override
-                    public void onDownloadPending() {
-                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
-                        setButtonStatus(downloadBean, holder);
+                    public void onDownloadPending(String url) {
+                        if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
+
+                        //UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
+                        setButtonStatus(url, holder);
                     }
 
                     @Override
-                    public void onDownloadPause(long progress) {
+                    public void onDownloadPause(String url, long progress) {
+                        if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
+
                         //Toast.makeText(mContext, "暂停，已下载字节：" + progress, Toast.LENGTH_SHORT).show();
-                        setButtonStatus(downloadBean, holder);
+                        setButtonStatus(url, holder);
                     }
 
                     @Override
-                    public void onDownloadComplete() {
-                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getTotalLength(), downloadBean.getTotalLength());
-                        setButtonStatus(downloadBean, holder);
+                    public void onDownloadComplete(String url) {
+                        if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
+
+                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), 100, 100);
+                        setButtonStatus(url, holder);
 
                         //Toast.makeText(mContext, "下载完成", Toast.LENGTH_SHORT).show();
                         //当前任务下载完，再继续下载之前被我们取消的任务：
                         //但是静默下载，修改tag
-                        LogUtils.d("继续执行之前被我们取消的任务：" + pUrl + ", 已完成任务：" + downloadBean.getUrl());
+                        LogUtils.d("继续执行之前被我们取消的任务：" + pUrl + ", 已完成任务：" + url);
 /*                        mDownloadManager.download(pUrl);
                         holder.itemView.setTag(pUrl);*/
-                        mDownloadManager.unregisterDownloadListener(downloadBean.getUrl());
+                        mDownloadManager.unregisterDownloadListener(url);
                     }
 
                     @Override
-                    public void onDownloadError(Exception e) {
+                    public void onDownloadError(String url, Exception e) {
+                        if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
+
                         Toast.makeText(mContext, "下载出错：" + e, Toast.LENGTH_SHORT).show();
-                        setButtonStatus(downloadBean, holder);
+                        setButtonStatus(url, holder);
                     }
                 });
 
@@ -108,15 +116,14 @@ public class DownloadListActivity extends AppCompatActivity {
             }
 
             //根据status设置按钮
-            public void setButtonStatus(final DownloadBean downloadBean, ViewHolder holder) {
-                switch (mDownloadManager.selectStatus(downloadBean.getUrl())) {
+            public void setButtonStatus(final String url, ViewHolder holder) {
+                switch (mDownloadManager.selectStatus(url)) {
                     case IDownloadManager.STATUS_FINISHED:
-                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getTotalLength(), downloadBean.getTotalLength());
                         holder.setText(R.id.stop, "删除");
                         holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
                             @Override
                             public void onClick(View v) {
-                                mDownloadManager.deleteFile(downloadBean);
+                                mDownloadManager.deleteFile(url);
                             }
                         });
                         break;
@@ -125,7 +132,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
                             @Override
                             public void onClick(View v) {
-                                mDownloadManager.stop(downloadBean.getUrl());
+                                mDownloadManager.stop(url);
                             }
                         });
                         break;
@@ -144,7 +151,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
                             @Override
                             public void onClick(View v) {
-                                mDownloadManager.download(downloadBean.getUrl());
+                                mDownloadManager.download(url);
                             }
                         });
                         break;

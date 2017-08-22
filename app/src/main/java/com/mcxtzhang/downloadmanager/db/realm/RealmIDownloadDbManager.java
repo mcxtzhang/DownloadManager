@@ -1,5 +1,7 @@
 package com.mcxtzhang.downloadmanager.db.realm;
 
+import android.text.TextUtils;
+
 import com.mcxtzhang.downloadmanager.download.DownloadBean;
 import com.mcxtzhang.downloadmanager.db.IDownloadDbManager;
 
@@ -33,11 +35,16 @@ public enum RealmIDownloadDbManager implements IDownloadDbManager {
 
     @Override
     public void deleteDownloadBean(DownloadBean downloadBean) {
-        if (null == downloadBean) return;
+        deleteDownloadBean(downloadBean.getUrl());
+    }
+
+    @Override
+    public void deleteDownloadBean(String url) {
+        if (TextUtils.isEmpty(url)) return;
         Realm realm = Realm.getDefaultInstance();
         try {
             final RealmResults<DownloadBean> toDeleteList = realm.where(DownloadBean.class)
-                    .equalTo(PRIMARY_KEY, downloadBean.getUrl())
+                    .equalTo(PRIMARY_KEY, url)
                     .findAll();
             realm.executeTransaction(new Realm.Transaction() {
                 @Override

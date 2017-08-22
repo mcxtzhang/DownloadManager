@@ -61,23 +61,23 @@ public class TestLeakActivity extends AppCompatActivity {
                     }
 
                     @Override
-                    public void onDownloadPending() {
+                    public void onDownloadPending(String url) {
                         Toast.makeText(TestLeakActivity.this, "排队中...", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadPause(long progress) {
+                    public void onDownloadPause(String url,long progress) {
                         Toast.makeText(TestLeakActivity.this, "下载暂停:" + progress, Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadComplete() {
+                    public void onDownloadComplete(String url) {
                         progressBar1.setMax(progressBar1.getMax());
                         Toast.makeText(TestLeakActivity.this, "下载完成", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadError(Exception e) {
+                    public void onDownloadError(String url,Exception e) {
                         Toast.makeText(TestLeakActivity.this, "下载失败:" + e, Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -103,23 +103,23 @@ public class TestLeakActivity extends AppCompatActivity {
                     }
 
                     @Override
-                    public void onDownloadPending() {
+                    public void onDownloadPending(String url) {
                         Toast.makeText(TestLeakActivity.this, "排队中...", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadPause(long progress) {
+                    public void onDownloadPause(String url,long progress) {
                         Toast.makeText(TestLeakActivity.this, "下载暂停:" + progress, Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadComplete() {
+                    public void onDownloadComplete(String url) {
                         progressBar2.setMax(progressBar2.getMax());
                         Toast.makeText(TestLeakActivity.this, "下载完成", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
-                    public void onDownloadError(Exception e) {
+                    public void onDownloadError(String url,Exception e) {
                         Toast.makeText(TestLeakActivity.this, "下载失败:" + e, Toast.LENGTH_SHORT).show();
                     }
                 });

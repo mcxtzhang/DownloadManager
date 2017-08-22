@@ -18,6 +18,8 @@ public interface IDownloadDbManager {
 
     void deleteDownloadBean(DownloadBean downloadBean);
 
+    void deleteDownloadBean(String url);
+
     void updateDownloadBean(DownloadBean downloadBean);
 
     DownloadBean selectDownloadBean(String url);
