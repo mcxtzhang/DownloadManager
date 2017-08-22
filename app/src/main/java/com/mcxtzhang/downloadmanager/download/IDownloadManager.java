@@ -13,7 +13,9 @@ import java.util.List;
 
 public interface IDownloadManager {
     interface DownloadListener {
-        void onDownloading(long progress, long maxLenght);
+        void onDownloading(String url,long progress, long maxLenght);
+
+        void onDownloadPending();
 
         void onDownloadPause(long progress);
 
@@ -51,6 +53,7 @@ public interface IDownloadManager {
     int STATUS_FINISHED = 1;//已完成
     int STATUS_DOWNLOADING = 2;//下载中
     int STATUS_UNFINISHED = 3;//未下载、就绪
+    int STATUS_PENDING = 4;//队列中
 
     //根据url查询下载任务状态
     int selectStatus(String url);

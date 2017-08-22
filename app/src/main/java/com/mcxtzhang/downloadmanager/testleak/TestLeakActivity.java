@@ -55,9 +55,14 @@ public class TestLeakActivity extends AppCompatActivity {
             public void onClick(View view) {
                 mDownloadManager.download(URLS[0], new ZDownloadManager.DownloadListener() {
                     @Override
-                    public void onDownloading(long progress, long maxLenght) {
+                    public void onDownloading(String url, long progress, long maxLenght) {
                         progressBar1.setMax((int) maxLenght);
                         progressBar1.setProgress((int) progress);
+                    }
+
+                    @Override
+                    public void onDownloadPending() {
+                        Toast.makeText(TestLeakActivity.this, "排队中...", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
@@ -92,9 +97,14 @@ public class TestLeakActivity extends AppCompatActivity {
             public void onClick(View view) {
                 mDownloadManager.download(URLS[1], new ZDownloadManager.DownloadListener() {
                     @Override
-                    public void onDownloading(long progress, long maxLenght) {
+                    public void onDownloading(String url, long progress, long maxLenght) {
                         progressBar2.setMax((int) maxLenght);
                         progressBar2.setProgress((int) progress);
+                    }
+
+                    @Override
+                    public void onDownloadPending() {
+                        Toast.makeText(TestLeakActivity.this, "排队中...", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override

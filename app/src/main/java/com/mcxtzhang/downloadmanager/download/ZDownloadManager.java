@@ -16,6 +16,8 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -41,31 +43,34 @@ public enum ZDownloadManager implements IDownloadManager {
     private OkHttpClient mClient;//OKHttpClient;
     private IDownloadDbManager mDbManager;
 
+    private int maxRequests;
     //正在下载的集合（url-Call)
-    private Map<String, Call> downloadingCallMap;
+    private Map<String, Call> mDownloadingCallMap;
     //被挂起的集合
-
+    private List<String> mPendingCall;
 
     //回调相关
     private Handler mMainHandler;
     //url-listener
-    private Map<String, DownloadListener> downloadListeners;
+    private Map<String, DownloadListener> mDownloadListener;
 
     ZDownloadManager() {
-        downloadingCallMap = new ArrayMap<>();
+        //mPendingCall = new LinkedHashMap<>(5, 0.75f, true);
+        mPendingCall = new LinkedList<>();
+        mDownloadingCallMap = new ArrayMap<>();
         mDbManager = DownloadDbFactory.getDownloadDbmanager();
 
         mMainHandler = new Handler(Looper.getMainLooper());
-        downloadListeners = new ArrayMap<>();
+        mDownloadListener = new ArrayMap<>();
     }
 
     @Override
-    public void download(String url) {
+    public synchronized void download(String url) {
         download(url, null);
     }
 
     @Override
-    public void download(final String url, DownloadListener downloadListener) {
+    public synchronized void download(final String url, DownloadListener downloadListener) {
         LogUtils.d("download() called with: url = [" + url + "], downloadListener = [" + downloadListener + "]");
         if (TextUtils.isEmpty(url)) return;
         //监听器加入集合
@@ -85,45 +90,35 @@ public enum ZDownloadManager implements IDownloadManager {
             return;
         }
 
-        Request request = new Request.Builder()
-                .header("RANGE", "bytes=" + downloadBean.getBegin() + "-")
-                .url(url)
-                .build();
-        Call call = getClient().newCall(request);
-        //正在下载任务集合
-        downloadingCallMap.put(url, call);
+        Call call = getCall(url, downloadBean);
+        //超过最大并发数
+        if (reachMaxRequests()) {
+            //挂起
+            pendingCall(url);
+        } else {
+            doCall(url, call);
+        }
 
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                if(!"Canceled".equals(e.getMessage())){
-                    notifyDownloadError(url, e);
-                }
-                //从运行中任务集合删除该url
-                downloadingCallMap.remove(url);
-            }
+        //notifyDownloadProgress(url, downloadBean.getBegin(), downloadBean.getTotalLength());
+    }
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                save(response, url);
-            }
-        });
-        notifyDownloadProgress(url, downloadBean.getBegin(), downloadBean.getTotalLength());
+    private boolean reachMaxRequests() {
+        return mDownloadingCallMap.size() >= maxRequests;
     }
 
     @Override
-    public void registerDownloadListener(String url, DownloadListener downloadListener) {
+    public synchronized void registerDownloadListener(String url, DownloadListener downloadListener) {
         if (TextUtils.isEmpty(url) || downloadListener == null) return;
-        downloadListeners.put(url, downloadListener);
+        mDownloadListener.put(url, downloadListener);
     }
 
     @Override
-    public void unregisterAllListener() {
-        downloadListeners.clear();
+    public synchronized void unregisterAllListener() {
+        mDownloadListener.clear();
     }
 
     @Override
-    public void unregisterDownloadListener(List<String> urls) {
+    public synchronized void unregisterDownloadListener(List<String> urls) {
         if (null == urls || urls.isEmpty()) return;
         for (String url : urls) {
             unregisterDownloadListener(url);
@@ -132,22 +127,22 @@ public enum ZDownloadManager implements IDownloadManager {
 
 
     @Override
-    public void unregisterDownloadListener(String url) {
+    public synchronized void unregisterDownloadListener(String url) {
         if (TextUtils.isEmpty(url)) return;
-        downloadListeners.remove(url);
+        mDownloadListener.remove(url);
     }
 
     @Override
-    public void stop(String url) {
+    public synchronized void stop(String url) {
         if (TextUtils.isEmpty(url)) return;
-        Call call = downloadingCallMap.get(url);
+        Call call = mDownloadingCallMap.get(url);
         DownloadBean downloadBean = mDbManager.selectDownloadBean(url);
         if (null != call) {
             LogUtils.d("stop,停止执行任务 = [" + url + "]");
             call.cancel();
-            downloadingCallMap.remove(url);
+            mDownloadingCallMap.remove(url);
         }
-        notifyDownloadPause(url, downloadBean!=null?downloadBean.getBegin():0);
+        notifyDownloadPause(url, downloadBean != null ? downloadBean.getBegin() : 0);
     }
 
     @Override
@@ -156,9 +151,11 @@ public enum ZDownloadManager implements IDownloadManager {
     }
 
     @Override
-    public int selectStatus(String url) {
+    public synchronized int selectStatus(String url) {
         if (isDownloading(url)) {
             return STATUS_DOWNLOADING;
+        } else if (isPending(url)) {
+            return STATUS_PENDING;
         } else {
             DownloadBean downloadBean = mDbManager.selectDownloadBean(url);
             if (downloadBean == null || !downloadBean.isFinished()) {
@@ -170,13 +167,74 @@ public enum ZDownloadManager implements IDownloadManager {
     }
 
     @Override
-    public void deleteFile(DownloadBean bean) {
+    public synchronized void deleteFile(DownloadBean bean) {
         // TODO: 2017/8/22 子线程操作 删除文件
         mDbManager.deleteDownloadBean(bean);
     }
 
+    private Call getCall(String url, DownloadBean downloadBean) {
+        Request request = new Request.Builder()
+                .header("RANGE", "bytes=" + downloadBean.getBegin() + "-")
+                .url(url)
+                .build();
+        return getClient().newCall(request);
+    }
+
+    private void pendingCall(String url) {
+        if (isDownloading(url)) return;
+        if (mPendingCall.indexOf(url) > -1) {
+            mPendingCall.remove(url);
+        }
+        mPendingCall.add(0, url);
+        notifyDownloadPending(url);
+    }
+
+    //执行下载任务
+    private void doCall(final String url, Call call) {
+        //正在下载任务集合
+        mDownloadingCallMap.put(url, call);
+
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                if (!"Canceled".equals(e.getMessage())) {
+                    notifyDownloadError(url, e);
+                }
+                onEnd(url);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                saveFile(response, url);
+                onEnd(url);
+            }
+        });
+    }
+
+    private void onEnd(String url) {
+        //从运行中任务集合删除该url
+        mDownloadingCallMap.remove(url);
+        //从pending集合中取出一个执行
+        promoteCalls();
+    }
+
+    private void promoteCalls() {
+        if (reachMaxRequests()) return;
+        if (mPendingCall.isEmpty()) return;
+        Iterator<String> iterator = mPendingCall.iterator();
+        String url;
+        //逆序遍历 取出最新加入的请求 先执行
+        while (iterator.hasNext()) {
+            url = iterator.next();
+            iterator.remove();//从pending删除
+            if (isDownloading(url)) continue;
+            doCall(url, getCall(url, mDbManager.selectDownloadBean(url)));//加入downloading
+            if (reachMaxRequests()) return;
+        }
+    }
+
     //下载文件 同时 将进度存入数据库， 回调通知监听者
-    private void save(Response response, String url) {
+    private void saveFile(Response response, String url) {
         final DownloadBean downloadBean = mDbManager.selectDownloadBean(url);
         if (downloadBean == null) return;
         ResponseBody body = response.body();
@@ -231,8 +289,6 @@ public enum ZDownloadManager implements IDownloadManager {
         } else {
             notifyDownloadPause(url, downloadBean.getBegin());
         }
-        //从运行中任务集合删除该url
-        downloadingCallMap.remove(downloadBean.getUrl());
         //Log.d("TAG", "download success() called with: body.contentLength() = [" + body.contentLength() + "], downloadBean = [" + downloadBean);
         LogUtils.d("save 结束， downloadBean = [" + downloadBean + "],body.contentLength():" + body.contentLength() + ", file.length():" + file.length());
 
@@ -240,7 +296,7 @@ public enum ZDownloadManager implements IDownloadManager {
 
 
     private void notifyDownloadComplete(String url) {
-        final DownloadListener downloadListener = downloadListeners.get(url);
+        final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
@@ -252,7 +308,7 @@ public enum ZDownloadManager implements IDownloadManager {
     }
 
     private void notifyDownloadError(String url, final Exception e) {
-        final DownloadListener downloadListener = downloadListeners.get(url);
+        final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
@@ -263,20 +319,20 @@ public enum ZDownloadManager implements IDownloadManager {
         }
     }
 
-    private void notifyDownloadProgress(String url, final long progress, final long maxLenght) {
-        final DownloadListener downloadListener = downloadListeners.get(url);
+    private void notifyDownloadProgress(final String url, final long progress, final long maxLenght) {
+        final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    downloadListener.onDownloading(progress, maxLenght);
+                    downloadListener.onDownloading(url,progress, maxLenght);
                 }
             });
         }
     }
 
     private void notifyDownloadPause(String url, final long progress) {
-        final DownloadListener downloadListener = downloadListeners.get(url);
+        final DownloadListener downloadListener = mDownloadListener.get(url);
         if (null != downloadListener) {
             mMainHandler.post(new Runnable() {
                 @Override
@@ -287,16 +343,33 @@ public enum ZDownloadManager implements IDownloadManager {
         }
     }
 
+    private void notifyDownloadPending(String url) {
+        final DownloadListener downloadListener = mDownloadListener.get(url);
+        if (null != downloadListener) {
+            mMainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    downloadListener.onDownloadPending();
+                }
+            });
+        }
+    }
+
     //判断某个下载任务是否正在运行中
     private boolean isDownloading(String url) {
-        Call call = downloadingCallMap.get(url);
-        return call != null;
+        return mDownloadingCallMap.get(url) != null;
+    }
+
+    //是否挂起中
+    private boolean isPending(String url) {
+        return mPendingCall.indexOf(url) > -1;
     }
 
 
     private OkHttpClient getClient() {
         if (null == mClient) {
             mClient = new OkHttpClient.Builder().build();
+            maxRequests = mClient.dispatcher().getMaxRequestsPerHost();//5
             //没有那么多下载url，将最大请求数限制为2，测试列表复用item，停止之前的请求，执行新请求，同时排队老请求
             //mClient.dispatcher().setMaxRequests(2);
         }
@@ -307,9 +380,16 @@ public enum ZDownloadManager implements IDownloadManager {
     public IDownloadManager setClient(OkHttpClient client) {
         if (null != client) {
             mClient = client;
+            maxRequests = mClient.dispatcher().getMaxRequestsPerHost();//5
         }
         return this;
     }
 
+    public int getMaxRequests() {
+        return maxRequests;
+    }
 
+    public void setMaxRequests(int maxRequests) {
+        this.maxRequests = maxRequests;
+    }
 }

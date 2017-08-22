@@ -58,13 +58,18 @@ public class DownloadListActivity extends AppCompatActivity {
                 //监听进度 改变UI
                 mDownloadManager.registerDownloadListener(downloadBean.getUrl(), new IDownloadManager.DownloadListener() {
                     @Override
-                    public void onDownloading(long progress, long maxLenght) {
-                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
-
+                    public void onDownloading(String url, long progress, long maxLenght) {
+                        if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
                         //同步更新bean
                         downloadBean.setBegin(progress);
                         downloadBean.setTotalLength(maxLenght);
+                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
+                        setButtonStatus(downloadBean, holder);
+                    }
 
+                    @Override
+                    public void onDownloadPending() {
+                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
                         setButtonStatus(downloadBean, holder);
                     }
 
@@ -98,6 +103,10 @@ public class DownloadListActivity extends AppCompatActivity {
 
             }
 
+            private boolean checkValid(String url, ViewHolder holder) {
+                return (url.equals(holder.itemView.getTag()));
+            }
+
             //根据status设置按钮
             public void setButtonStatus(final DownloadBean downloadBean, ViewHolder holder) {
                 switch (mDownloadManager.selectStatus(downloadBean.getUrl())) {
@@ -116,6 +125,15 @@ public class DownloadListActivity extends AppCompatActivity {
                             @Override
                             public void onClick(View v) {
                                 mDownloadManager.stop(downloadBean.getUrl());
+                            }
+                        });
+                        break;
+                    case IDownloadManager.STATUS_PENDING:
+                        holder.setText(R.id.stop, "队列中");
+                        holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+
                             }
                         });
                         break;
