@@ -111,6 +111,7 @@ public class DownloadListActivity extends AppCompatActivity {
             public void setButtonStatus(final DownloadBean downloadBean, ViewHolder holder) {
                 switch (mDownloadManager.selectStatus(downloadBean.getUrl())) {
                     case IDownloadManager.STATUS_FINISHED:
+                        UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getTotalLength(), downloadBean.getTotalLength());
                         holder.setText(R.id.stop, "删除");
                         holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
                             @Override
