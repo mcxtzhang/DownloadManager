@@ -96,7 +96,11 @@ public enum ZDownloadManager implements IDownloadManager {
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                notifyDownloadError(url, e);
+                if(!"Canceled".equals(e.getMessage())){
+                    notifyDownloadError(url, e);
+                }
+                //从运行中任务集合删除该url
+                downloadingCallMap.remove(url);
             }
 
             @Override
