@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">DownloadManager</string>
+    <string name="title_activity_download_list">DownloadListActivity</string>
+</resources>
