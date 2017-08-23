@@ -64,7 +64,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
 
                         UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), progress, maxLenght);
-                        setButtonStatus(url, holder);
+                        setButtonStatus(url, holder, IDownloadManager.STATUS_DOWNLOADING);
                     }
 
                     @Override
@@ -72,7 +72,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
 
                         //UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), downloadBean.getBegin(), downloadBean.getTotalLength());
-                        setButtonStatus(url, holder);
+                        setButtonStatus(url, holder, IDownloadManager.STATUS_PENDING);
                     }
 
                     @Override
@@ -80,7 +80,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
 
                         //Toast.makeText(mContext, "暂停，已下载字节：" + progress, Toast.LENGTH_SHORT).show();
-                        setButtonStatus(url, holder);
+                        setButtonStatus(url, holder, IDownloadManager.STATUS_UNFINISHED);
                     }
 
                     @Override
@@ -88,12 +88,12 @@ public class DownloadListActivity extends AppCompatActivity {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
 
                         UIUtils.setProgress((ProgressBar) holder.getView(R.id.progress), 100, 100);
-                        setButtonStatus(url, holder);
+                        setButtonStatus(url, holder, IDownloadManager.STATUS_FINISHED);
 
                         //Toast.makeText(mContext, "下载完成", Toast.LENGTH_SHORT).show();
                         //当前任务下载完，再继续下载之前被我们取消的任务：
                         //但是静默下载，修改tag
-                        LogUtils.d("继续执行之前被我们取消的任务：" + pUrl + ", 已完成任务：" + url);
+                        //LogUtils.d("继续执行之前被我们取消的任务：" + pUrl + ", 已完成任务：" + url);
 /*                        mDownloadManager.download(pUrl);
                         holder.itemView.setTag(pUrl);*/
                         mDownloadManager.unregisterDownloadListener(url);
@@ -104,7 +104,7 @@ public class DownloadListActivity extends AppCompatActivity {
                         if (!checkValid(url, holder)) return;//没来及注销 回调先执行的异常情况
 
                         Toast.makeText(mContext, "下载出错：" + e, Toast.LENGTH_SHORT).show();
-                        setButtonStatus(url, holder);
+                        setButtonStatus(url, holder, IDownloadManager.STATUS_UNFINISHED);
                     }
                 });
 
@@ -117,7 +117,11 @@ public class DownloadListActivity extends AppCompatActivity {
 
             //根据status设置按钮
             public void setButtonStatus(final String url, ViewHolder holder) {
-                switch (mDownloadManager.selectStatus(url)) {
+                setButtonStatus(url, holder, mDownloadManager.selectStatus(url));
+            }
+
+            public void setButtonStatus(final String url, ViewHolder holder, int status) {
+                switch (status) {
                     case IDownloadManager.STATUS_FINISHED:
                         holder.setText(R.id.stop, "删除");
                         holder.setOnClickListener(R.id.stop, new View.OnClickListener() {
