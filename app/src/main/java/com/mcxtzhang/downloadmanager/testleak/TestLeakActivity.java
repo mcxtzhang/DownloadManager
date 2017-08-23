@@ -74,6 +74,8 @@ public class TestLeakActivity extends AppCompatActivity {
                     public void onDownloadComplete(String url) {
                         progressBar1.setMax(progressBar1.getMax());
                         Toast.makeText(TestLeakActivity.this, "下载完成", Toast.LENGTH_SHORT).show();
+                        progressBar1.setMax(100);
+                        progressBar1.setProgress(100);
                     }
 
                     @Override
