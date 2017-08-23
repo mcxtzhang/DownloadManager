@@ -120,7 +120,7 @@ public class DownloadListActivity extends AppCompatActivity {
                 setButtonStatus(url, holder, mDownloadManager.selectStatus(url));
             }
 
-            public void setButtonStatus(final String url, ViewHolder holder, int status) {
+            public void setButtonStatus(final String url, final ViewHolder holder, int status) {
                 switch (status) {
                     case IDownloadManager.STATUS_FINISHED:
                         holder.setText(R.id.stop, "删除");
@@ -128,6 +128,8 @@ public class DownloadListActivity extends AppCompatActivity {
                             @Override
                             public void onClick(View v) {
                                 mDownloadManager.deleteFile(url);
+                                mDatas.remove(holder.getLayoutPosition());
+                                notifyItemRemoved(holder.getLayoutPosition());
                             }
                         });
                         break;
